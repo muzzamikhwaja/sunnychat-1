@@ -1,36 +1,595 @@
-# This is a basic workflow to help you get started with Actions
+import { useState, useEffect, useRef } from 'react';
+import { Button } from "/components/ui/button";
+import { Input } from "/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "/components/ui/select";
+import {
+  MessageSquare,
+  Video,
+  Phone,
+  Paperclip,
+  MapPin,
+  Send,
+  User,
+  ArrowLeft,
+  Check,
+  MoreVertical,
+  Search,
+} from 'lucide-react';
 
-name: CI
+// Types
+type Contact = {
+  id: string;
+  name: string;
+  avatar: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  unreadCount?: number;
+  online?: boolean;
+};
 
-# Controls when the workflow will run
-on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+type Message = {
+  id: string;
+  text: string;
+  timestamp: string;
+  isSent: boolean;
+  isRead: boolean;
+  type: 'text' | 'image' | 'video' | 'document' | 'location' | 'link';
+  content?: string; // URL for media/location
+};
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+type Call = {
+  id: string;
+  contactId: string;
+  type: 'video' | 'audio';
+  timestamp: string;
+  duration: string;
+  missed: boolean;
+};
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
-jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+// Mock Data
+const mockContacts: Contact[] = [
+  {
+    id: '1',
+    name: 'John Doe',
+    avatar: '',
+    lastMessage: 'Hey, how are you?',
+    lastMessageTime: '10:30 AM',
+    unreadCount: 2,
+    online: true,
+  },
+  // ... more contacts
+];
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+const mockMessages: Record<string, Message[]> = {
+  '1': [
+    {
+      id: '1',
+      text: 'Hey there!',
+      timestamp: '10:00 AM',
+      isSent: false,
+      isRead: true,
+      type: 'text',
+    },
+    // ... more messages of different types
+  ],
+};
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+const mockCalls: Call[] = [
+  {
+    id: '1',
+    contactId: '1',
+    type: 'video',
+    timestamp: '2023-06-20T10:30:00',
+    duration: '5:32',
+    missed: false,
+  },
+  // ... more calls
+];
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+export default function WhatsAppClone() {
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState({
+    code: 'US',
+    dialCode: '+1',
+    flag: '🇺🇸',
+  });
+
+  // App State
+  const [currentView, setCurrentView] = useState<'chats' | 'calls' | 'contacts'>('chats');
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [messages, setMessages] = useState<Record<string, Message[]>>(mockMessages);
+  const [newMessage, setNewMessage] = useState('');
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [showVideoCallUI, setShowVideoCallUI] = useState(false);
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+
+  // Refs
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, selectedContact]);
+
+  // Mock OTP verification
+  const handleOtpSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp === '123456') { // Mock OTP
+      setIsAuthenticated(true);
+    }
+  };
+
+  // Send message handler
+  const handleSendMessage = () => {
+    if (!newMessage.trim() || !selectedContact) return;
+
+    const newMsg: Message = {
+      id: Date.now().toString(),
+      text: newMessage,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSent: true,
+      isRead: false,
+      type: 'text',
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [selectedContact.id]: [...(prev[selectedContact.id] || []), newMsg],
+    }));
+
+    setNewMessage('');
+  };
+
+  // Start video call
+  const startVideoCall = () => {
+    if (!selectedContact) return;
+    
+    const newCall: Call = {
+      id: Date.now().toString(),
+      contactId: selectedContact.id,
+      type: 'video',
+      timestamp: new Date().toISOString(),
+      duration: '0:00',
+      missed: false,
+    };
+    
+    setActiveCall(newCall);
+    setShowVideoCallUI(true);
+    
+    // Mock: simulate call connection after 2 seconds
+    setTimeout(() => {
+      if (videoRef.current) {
+        // In a real app, you would stream actual video here
+        videoRef.current.srcObject = new MediaStream();
+      }
+    }, 2000);
+  };
+
+  // End video call
+  const endVideoCall = () => {
+    if (activeCall) {
+      // Update call duration
+      const updatedCall = {
+        ...activeCall,
+        duration: '1:23', // Mock duration
+      };
+      // Add to call history
+      // mockCalls.unshift(updatedCall);
+    }
+    
+    setShowVideoCallUI(false);
+    setActiveCall(null);
+  };
+
+  // Handle attachment selection
+  const handleAttachmentSelect = (type: Message['type']) => {
+    setShowAttachmentMenu(false);
+    
+    if (!selectedContact) return;
+    
+    // Mock content based on type
+    let content = '';
+    switch (type) {
+      case 'image':
+        content = 'https://example.com/image.jpg';
+        break;
+      case 'video':
+        content = 'https://example.com/video.mp4';
+        break;
+      case 'document':
+        content = 'https://example.com/document.pdf';
+        break;
+      case 'location':
+        content = 'https://maps.google.com/?q=37.7749,-122.4194';
+        break;
+      default:
+        return;
+    }
+    
+    const newMsg: Message = {
+      id: Date.now().toString(),
+      text: type === 'location' ? 'Shared location' : `Shared ${type}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSent: true,
+      isRead: false,
+      type,
+      content,
+    };
+    
+    setMessages(prev => ({
+      ...prev,
+      [selectedContact.id]: [...(prev[selectedContact.id] || []), newMsg],
+    }));
+  };
+
+  // Render message based on type
+  const renderMessage = (message: Message) => {
+    switch (message.type) {
+      case 'text':
+        return <p>{message.text}</p>;
+      case 'image':
+        return (
+          <div className="relative">
+            <img src={message.content} alt="Shared" className="rounded-lg max-w-xs" />
+            <p className="text-xs mt-1">{message.text}</p>
+          </div>
+        );
+      case 'video':
+        return (
+          <div className="relative">
+            <video src={message.content} controls className="rounded-lg max-w-xs" />
+            <p className="text-xs mt-1">{message.text}</p>
+          </div>
+        );
+      case 'document':
+        return (
+          <div className="border rounded-lg p-2 max-w-xs">
+            <p className="font-medium">Document</p>
+            <p className="text-sm truncate">{message.content?.split('/').pop()}</p>
+            <p className="text-xs mt-1">{message.text}</p>
+          </div>
+        );
+      case 'location':
+        return (
+          <div className="border rounded-lg overflow-hidden max-w-xs">
+            <div className="bg-gray-200 h-32 flex items-center justify-center">
+              <MapPin className="h-8 w-8 text-red-500" />
+            </div>
+            <p className="p-2 text-sm">{message.text}</p>
+          </div>
+        );
+      case 'link':
+        return (
+          <div className="border rounded-lg p-2 max-w-xs">
+            <p className="text-blue-600 underline">{message.content}</p>
+            <p className="text-xs mt-1">{message.text}</p>
+          </div>
+        );
+      default:
+        return <p>{message.text}</p>;
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl">Verify Your Number</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleOtpSubmit} className="space-y-4">
+              <div className="flex">
+                <Select
+                  value={selectedCountry.code}
+                  onValueChange={(value) => {
+                    const country = countryCodes.find(c => c.code === value);
+                    if (country) setSelectedCountry(country);
+                  }}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="Country">
+                      {selectedCountry.flag} {selectedCountry.dialCode}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {countryCodes.map((country) => (
+                      <SelectItem key={country.code} value={country.code}>
+                        {country.flag} {country.name} ({country.dialCode})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="tel"
+                  placeholder="Phone number"
+                  className="flex-1 ml-2"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </div>
+              <Button type="button" className="w-full" onClick={() => setOtp('123456')}>
+                Send OTP
+              </Button>
+              <Input
+                type="text"
+                placeholder="Enter OTP"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                maxLength={6}
+              />
+              <Button type="submit" className="w-full">
+                Verify
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (showVideoCallUI && activeCall) {
+    return (
+      <div className="fixed inset-0 bg-black text-white z-50 flex flex-col">
+        <div className="flex-1 relative">
+          {/* Remote video */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            className="w-full h-full object-cover"
+          />
+          
+          {/* Local video preview */}
+          <div className="absolute bottom-4 right-4 w-32 h-48 bg-gray-800 rounded-lg overflow-hidden">
+            <div className="w-full h-full flex items-center justify-center">
+              <User className="h-12 w-12 text-gray-400" />
+            </div>
+          </div>
+          
+          {/* Call info */}
+          <div className="absolute top-4 left-4">
+            <h2 className="text-xl font-bold">{selectedContact?.name}</h2>
+            <p className="text-sm">Calling...</p>
+          </div>
+        </div>
+        
+        {/* Call controls */}
+        <div className="bg-gray-900 p-4 flex justify-center space-x-8">
+          <button className="bg-red-600 rounded-full p-4" onClick={endVideoCall}>
+            <Phone className="h-6 w-6" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-100">
+      {/* Header */}
+      <div className="bg-green-600 text-white p-4">
+        {selectedContact ? (
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white"
+              onClick={() => setSelectedContact(null)}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="ml-4 flex-1">
+              <h2 className="font-semibold">{selectedContact.name}</h2>
+              <p className="text-xs">
+                {selectedContact.online ? 'Online' : 'Last seen today at 12:30 PM'}
+              </p>
+            </div>
+            <div className="flex space-x-2">
+              <Button variant="ghost" size="icon" className="text-white">
+                <Phone className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white"
+                onClick={startVideoCall}
+              >
+                <Video className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-white">
+                <MoreVertical className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl font-semibold">WhatsApp</h1>
+            <div className="flex space-x-4">
+              <Button variant="ghost" size="icon" className="text-white">
+                <Search className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-white">
+                <MoreVertical className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden">
+        {selectedContact ? (
+          // Chat View
+          <div className="h-full flex flex-col">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages[selectedContact.id]?.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.isSent ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-xs p-3 rounded-lg ${
+                      message.isSent ? 'bg-green-100' : 'bg-white'
+                    }`}
+                  >
+                    {renderMessage(message)}
+                    <div className="flex justify-end items-center mt-1 space-x-1">
+                      <span className="text-xs text-gray-500">
+                        {message.timestamp}
+                      </span>
+                      {message.isSent && (
+                        <span className="text-xs">
+                          {message.isRead ? (
+                            <Check className="h-3 w-3 text-blue-500" />
+                          ) : (
+                            <Check className="h-3 w-3" />
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Message Input */}
+            <div className="p-3 bg-white border-t flex items-center">
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                >
+                  <Paperclip className="h-5 w-5" />
+                </Button>
+                {showAttachmentMenu && (
+                  <div className="absolute bottom-12 left-0 bg-white shadow-lg rounded-lg p-2 w-48 z-10">
+                    <button
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded"
+                      onClick={() => handleAttachmentSelect('image')}
+                    >
+                      Photo & Video
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded"
+                      onClick={() => handleAttachmentSelect('document')}
+                    >
+                      Document
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded"
+                      onClick={() => handleAttachmentSelect('location')}
+                    >
+                      Location
+                    </button>
+                  </div>
+                )}
+              </div>
+              <Input
+                placeholder="Type a message"
+                className="flex-1 mx-2"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') handleSendMessage();
+                }}
+              />
+              <Button size="icon" onClick={handleSendMessage}>
+                <Send className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          // Contacts/Chats List
+          <div className="h-full overflow-y-auto">
+            {/* Tabs */}
+            <div className="flex border-b">
+              <button
+                className={`flex-1 py-3 font-medium ${
+                  currentView === 'chats' ? 'text-green-600 border-b-2 border-green-600' : ''
+                }`}
+                onClick={() => setCurrentView('chats')}
+              >
+                CHATS
+              </button>
+              <button
+                className={`flex-1 py-3 font-medium ${
+                  currentView === 'calls' ? 'text-green-600 border-b-2 border-green-600' : ''
+                }`}
+                onClick={() => setCurrentView('calls')}
+              >
+                CALLS
+              </button>
+              <button
+                className={`flex-1 py-3 font-medium ${
+                  currentView === 'contacts' ? 'text-green-600 border-b-2 border-green-600' : ''
+                }`}
+                onClick={() => setCurrentView('contacts')}
+              >
+                CONTACTS
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="divide-y">
+              {mockContacts.map((contact) => (
+                <div
+                  key={contact.id}
+                  className="p-3 bg-white hover:bg-gray-50 cursor-pointer flex items-center"
+                  onClick={() => setSelectedContact(contact)}
+                >
+                  <div className="relative">
+                    <div className="bg-gray-200 border-2 border-dashed rounded-xl w-12 h-12" />
+                    {contact.online && (
+                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                    )}
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-medium">{contact.name}</h3>
+                      <span className="text-xs text-gray-500">
+                        {contact.lastMessageTime}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-gray-500 truncate max-w-xs">
+                        {contact.lastMessage}
+                      </p>
+                      {contact.unreadCount ? (
+                        <span className="bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                          {contact.unreadCount}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Country codes data
+const countryCodes = [
+  { code: 'US', name: 'United States', dialCode: '+1', flag: '🇺🇸' },
+  { code: 'IN', name: 'India', dialCode: '+91', flag: '🇮🇳' },
+  // ... more countries
+];
+Share
+Refre
